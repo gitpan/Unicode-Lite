@@ -7,17 +7,22 @@ use base qw/Exporter/;
 use Carp qw/croak carp/;
 
 our @EXPORT  = qw(convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL);
-our $VERSION = 0.04;
+our $VERSION = '0.05';
 our %MAPPING;
 our %CONVERT;
 our %EQUIVAL;
 
 #use enum qw/BITMASK: RP_CHR RP_ENT EQ_CHR EQ_SEQ EQ_7BT/;
+#use enum qw/nil dst src all/;
 use constant RP_CHR => 0x01;
 use constant RP_ENT => 0x02;
 use constant EQ_CHR => 0x04;
 use constant EQ_SEQ => 0x08;
 use constant EQ_7BT => 0x10;
+use constant nil => 0x0;
+use constant src => 0x1;
+use constant dst => 0x2;
+use constant all => 0x3;
 
 use constant UL_CHR => RP_CHR;          # REPLACE TO CHAR   (default <Space>)
 use constant UL_ENT => RP_CHR | RP_ENT; # REPLACE TO ENTITY (like    &#0000;)
@@ -26,12 +31,9 @@ use constant UL_SEQ => EQ_CHR | EQ_SEQ; # EQUIVALENT sequence of chars
 use constant UL_7BT => EQ_7BT | UL_SEQ; # EQUIVALENT sequence of 7bit chars
 use constant UL_ALL => UL_CHR | UL_ENT | UL_EQV | UL_SEQ;
 
-#use enum qw/nil dst src all/;
-use constant nil => 0x0;
-use constant src => 0x1;
-use constant dst => 0x2;
-use constant all => 0x3;
 use constant uni => qr/^utf16|utf8|utf7|ucs4|uchr|uhex|latin1$/;
+
+our $TEST = 0;
 
 sub convertor($$;$$)
 {
@@ -64,36 +66,45 @@ sub convertor($$;$$)
         croak "Can't create Unicode::Map object for '$$_[1]' charset!";
     }
 
-    $map = all if $mod & EQ_7BT and
+    #warn "1. $SRC -> $DST ($map)\n" if $TEST;
+    $map = all if #$mod & EQ_7BT and
         $map == src && $DST eq 'latin1' or
         $map == dst && $SRC eq 'latin1' or
         $map == nil && $SRC eq 'latin1' && $DST eq 'latin1';
+    #warn "2. $SRC -> $DST ($map)\n" if $TEST;
 
     # Situation checking
     croak "FLAG param can be only for SBCS->SBCS!" if $map != all and $mod;
     croak "CHAR param can be only for SBCS->SBCS!" if $map != all and length $chr;
     croak "Can't convert to the same codepage!"    if $SRC eq $DST and
                                                       $map != all || not $mod & EQ_7BT;
-    my $mutator;
-    if ($map != all){
-        $mutator =
-            ($map & src) ? "\$MAPPING{'$SRC'}->to_unicode(\$_)" :
-            ($map & dst) ? "\$_" : "Unicode::String::$SRC(\$_)" .
-            ($SRC ne 'utf16' && $DST ne 'utf8' ? '->utf16' : '' );
-        $mutator =
-            ($map & dst) ? "\$MAPPING{'$DST'}->from_unicode($mutator)" :
-            ($map & src) ? "Unicode::String::utf16($mutator)->$DST" :
-            $mutator."->$DST" if $DST ne 'utf16';
-        $mutator = '$_='.$mutator;
+    my $mut;
+
+    if ($map != all)
+    {
+        my ($uni, $utf, $str) = ($map^all, 0, 0);
+        $utf |= src if $uni & src and $SRC ne 'utf16';
+        $utf |= dst if $uni & dst and $DST ne 'utf16';
+
+        $mut = '$_';
+
+        $mut = "\$MAPPING{'$SRC'}->to_unicode($mut)"   if $map & src;
+        $mut = "Unicode::String::$SRC($mut)"           if $uni & src && not 
+                                                          $map & dst &&!($utf&src);
+        $mut = "\$MAPPING{'$DST'}->from_unicode($mut)" if $map & dst;
+        $mut = "Unicode::String::utf16($mut)"          if $utf & dst && $map & src;
+        $mut = "$mut->$DST"                            if $uni & dst && $uni & src or
+                                                          $utf & dst && $map & src;
+        $mut = '$_='.$mut;
     }
-    else{ $mutator = __sbcs_convertor($SRC, $DST, $mod, $chr) }
-    #warn "$mutator\n";
+    else{ $mut = __sbcs_convertor($SRC, $DST, $mod, $chr) }
+    warn "$SRC -> $DST ($map)\t\t$mut\n" if $TEST;
 
     return
         $CONVERT{$src}{$dst}{$mod}{$chr} =
         $CONVERT{$SRC}{$DST}{$mod}{$chr} = eval 'sub(;$){
         my $str = @_ ? $_[0] : defined wantarray ? $_ : \$_;
-        for( ref$str?$$str:$str ){ if(length){'.$mutator.'}
+        for( ref$str?$$str:$str ){ if(length){'.$mut.'}
         return $_ if defined wantarray}
         $_ = $str if defined $_[0] and not ref $str }';
 }

@@ -3,6 +3,10 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 
 WriteMakefile(
-    'NAME'  => 'Unicode::Lite',
-    'VERSION_FROM' => 'Lite.pm', # finds $VERSION
+    'NAME'         => 'Unicode::Lite',
+    'VERSION_FROM' => 'Lite.pm',
+    'PREREQ_PM'    => { 
+        'Unicode::String' => 2.06,
+        'Unicode::Map'    => 0.110,
+    },
 );
