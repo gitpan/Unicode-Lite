@@ -4,7 +4,7 @@ use 5.005_02;
 use strict;
 use Exporter;
 
-$Unicode::Lite::VERSION   = '0.01';
+$Unicode::Lite::VERSION   = '0.02';
 @Unicode::Lite::ISA       = qw(Exporter);
 @Unicode::Lite::EXPORT_OK = qw(convert convertor);
 
@@ -14,53 +14,59 @@ sub convert($$;$){
 }
 
 sub convertor($$){
-    my ($src, $dst, $map) = (shift, shift, 0);
+    my ($src, $dst) = (shift, shift);
+    my ($Src, $Dst, $map) = ($src, $dst, 0);
 
     return $Unicode::Lite::Convertors{$src}{$dst} if
         defined $Unicode::Lite::Convertors{$src}{$dst};
 
     require "Unicode/String.pm" unless defined %Unicode::String::;
 
-    for( $src, $dst )
+    for my $cs ($Src, $Dst)
     {
         $map <<= 1;
-
-        next if
-            s/^utf16|utf8|utf7|ucs4|latin1|uchr|uhex$/\L$_/i or
-            s/^ucs2|unicode$/utf16/i;
-
+        next if $cs =~ s/^utf16|utf8|utf7|ucs4|latin1|uchr|uhex$/\L$_/i or
+                $cs =~ s/^ucs2|unicode$/utf16/i;
         $map |= 1;
 
+        next if exists $Unicode::Lite::Map{$cs};
+
         require "Unicode/Map.pm" unless defined %Unicode::Map::;
+        local $_; # Unicode::Map bugfixer
 
-        my $cs = $_; # Unicode::Map bugfixer
+        $Unicode::Lite::Map = new Unicode::Map() unless
+            defined $Unicode::Lite::Map;
 
-        $Unicode::Lite::Map{''} = new Unicode::Map() unless
-            defined $Unicode::Lite::Map{''};
+        $_ = $Unicode::Lite::Map->_real_id( $cs ) ||
+            warn "Character Set '$cs' not defined!\n";
 
-        $_ = $cs;    # Unicode::Map bugfixer
+        next if 
+            exists $Unicode::Lite::Map{$_} and
+            $Unicode::Lite::Map{$cs} = $Unicode::Lite::Map{$_};
 
-        $_ = $Unicode::Lite::Map{''}->_real_id( $_ ) ||
-            warn "Character Set '$_' not defined!\n";
-
-        $Unicode::Lite::Map{$_} = new Unicode::Map( $_ );
+        $Unicode::Lite::Map{$cs} =
+        $Unicode::Lite::Map{$_}  = new Unicode::Map( $_ );
     }
 
-    die "Can't convert to the same codepage!\n" if $src eq $dst;
+    die "Can't convert to the same codepage!\n" if $Src eq $Dst;
 
-    return $Unicode::Lite::Convertors{$src}{$dst} if
-        defined $Unicode::Lite::Convertors{$src}{$dst};
+    return 
+        $Unicode::Lite::Convertors{$src}{$dst} = 
+        $Unicode::Lite::Convertors{$Src}{$Dst} if
+        defined $Unicode::Lite::Convertors{$Src}{$Dst};
 
     my $mut = sprintf( $map & 2 ? '$Unicode::Lite::Map{%s}->to_unicode' :
         'Unicode::String::%s', $src ).'(ref$str?$$str:$str)';
 
     $mut = $map & 1 ?
         sprintf( '$Unicode::Lite::Map{%s}->from_unicode(%s%s)',
-            $dst, $mut, $map&2 ? '' : '->utf16' ) :
-        $dst eq 'utf16' && $map&2 ? $mut :
-        ($map&2 ? "Unicode::String::utf16($mut)" : $mut)."->$dst";
+            $Dst, $mut, $map&2 ? '' : '->utf16' ) :
+        $Dst eq 'utf16' && $map&2 ? $mut :
+        ($map&2 ? "Unicode::String::utf16($mut)" : $mut)."->$Dst";
 
-    return $Unicode::Lite::Convertors{$src}{$dst} = eval sprintf
+    return 
+        $Unicode::Lite::Convertors{$src}{$dst} =
+        $Unicode::Lite::Convertors{$Src}{$Dst} = eval sprintf
         q/sub(;$){
         my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
         ref$str?$$str:$str = %s if length ref$str?$$str:$str;
