@@ -1,15 +1,22 @@
+#!perl -w
+#
+# Contributor(s):
+#   Jan Kratochvil <short@ucw.cz> - backport
+#
+
 package Unicode::Lite;
 
-use 5.005_62;
+use 5.005_03;
 use strict;
-use warnings;
+#use warnings;
 use base qw/Exporter/;
 use Carp qw/croak carp/;
 
 
-our $VERSION = '0.09';
-our @EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
-our %EXPORT_TAGS = (
+use vars qw($VERSION @EXPORT %EXPORT_TAGS);
+$VERSION = '0.09';
+@EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
+%EXPORT_TAGS = (
 	utils => [grep{!/^UL_/}@EXPORT],
 	flags => [grep{ /^UL_/}@EXPORT]
 );
@@ -24,7 +31,7 @@ use constant UL_EQV => EQ_CHR;          # EQUIVALENT char
 use constant UL_SEQ => EQ_CHR | EQ_SEQ; # EQUIVALENT sequence of chars
 use constant UL_7BT => EQ_7BT | UL_SEQ; # EQUIVALENT sequence of 7bit chars
 use constant UL_ALL => UL_CHR | UL_ENT | UL_EQV | UL_SEQ;
-our (%MAPPING, %CONVERT, %EQUIVAL, $REGISTR, $TEST);
+use vars qw(%MAPPING %CONVERT %EQUIVAL $REGISTR $TEST);
 
 sub convertor($$;$$)
 {
@@ -66,7 +73,7 @@ sub convertor($$;$$)
 	croak "FLAG param can be only for SBCS->SBCS!" if $map != all and $mod;
 	croak "CHAR param can be only for SBCS->SBCS!" if $map != all and length $chr;
 	croak "Can't convert to the same codepage!"    if $SRC eq $DST and
-													  $map != all || not $mod & EQ_7BT;
+					                                  $map != all || not $mod & EQ_7BT;
 	my ($mut);
 	if ($map != all)
 	{
@@ -78,11 +85,11 @@ sub convertor($$;$$)
 
 		$mut = "\$MAPPING{'$SRC'}->to_unicode($mut)"   if $map & src;
 		$mut = "Unicode::String::$SRC($mut)"           if $uni & src && not
-														  $map & dst &&!($utf&src);
+					                                      $map & dst &&!($utf&src);
 		$mut = "\$MAPPING{'$DST'}->from_unicode($mut)" if $map & dst;
 		$mut = "Unicode::String::utf16($mut)"          if $utf & dst && $map & src;
 		$mut = "$mut->$DST"                            if $uni & dst && $uni & src or
-														  $utf & dst && $map & src;
+					                                      $utf & dst && $map & src;
 		$mut = '$_='.$mut;
 	}
 	else{ $mut = __sbcs_convertor($SRC, $DST, $mod, $chr) }
@@ -181,7 +188,7 @@ sub __sbcs_convertor($$$$)
 			push @eqv, [$_, $uni];
 			next if not ($dst{$uni} and $_ == $dst{$uni} - 0x80) and
 			push @map, [$_, $uni];
-            @dif = grep{ $_ != $dst{$uni} }@dif;
+			@dif = grep{ $_ != $dst{$uni} }@dif;
 
 		}elsif( $mod & RP_ENT ){
 			push @ent, [$_, $src[$_]];
@@ -201,7 +208,7 @@ sub __sbcs_convertor($$$$)
 
 	$src .= chr $$_[0] + 0x80,
 	$dst .= chr($$_[1] < 0x80 ? $$_[1] : $dst{$$_[1]})
-								for @map;
+					            for @map;
 	for (@ent){
 		$src .= chr $$_[0] + 0x80;
 		$dst .= $$_[0] = chr shift @dif;
@@ -354,7 +361,7 @@ http://www.perl.com/CPAN
 
 =head1 SEE ALSO
 
-Unicode::String, Unicode::Map, map
+Unicode::String, Unicode::Map, map.
 
 =cut
 
