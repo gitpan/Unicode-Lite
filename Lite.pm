@@ -4,7 +4,7 @@ use 5.005_02;
 use strict;
 use Exporter;
 
-$Unicode::Lite::VERSION   = '0.02';
+$Unicode::Lite::VERSION   = '0.03';
 @Unicode::Lite::ISA       = qw(Exporter);
 @Unicode::Lite::EXPORT_OK = qw(convert convertor);
 
@@ -15,17 +15,17 @@ sub convert($$;$){
 
 sub convertor($$){
     my ($src, $dst) = (shift, shift);
-    my ($Src, $Dst, $map) = ($src, $dst, 0);
 
-    return $Unicode::Lite::Convertors{$src}{$dst} if
-        defined $Unicode::Lite::Convertors{$src}{$dst};
+    return $Unicode::Lite::Convertors{$src}{$dst} if defined 
+           $Unicode::Lite::Convertors{$src}{$dst};
 
     require "Unicode/String.pm" unless defined %Unicode::String::;
 
+    my ($Src, $Dst, $map) = ($src, $dst, 0);
     for my $cs ($Src, $Dst)
     {
         $map <<= 1;
-        next if $cs =~ s/^utf16|utf8|utf7|ucs4|latin1|uchr|uhex$/\L$_/i or
+        next if $cs =~ s/^utf16|utf8|utf7|ucs4|latin1|uchr|uhex$/\L$cs/i or
                 $cs =~ s/^ucs2|unicode$/utf16/i;
         $map |= 1;
 
@@ -45,29 +45,29 @@ sub convertor($$){
             $Unicode::Lite::Map{$cs} = $Unicode::Lite::Map{$_};
 
         $Unicode::Lite::Map{$cs} =
-        $Unicode::Lite::Map{$_}  = new Unicode::Map( $_ );
+        $Unicode::Lite::Map{$_}  = new Unicode::Map( $_ ) or
+            die "Can't create Unicode::Map object for '$cs' charset!\n";
     }
 
     die "Can't convert to the same codepage!\n" if $Src eq $Dst;
 
     return 
         $Unicode::Lite::Convertors{$src}{$dst} = 
-        $Unicode::Lite::Convertors{$Src}{$Dst} if
-        defined $Unicode::Lite::Convertors{$Src}{$Dst};
+        $Unicode::Lite::Convertors{$Src}{$Dst} if defined 
+        $Unicode::Lite::Convertors{$Src}{$Dst};
 
-    my $mut = sprintf( $map & 2 ? '$Unicode::Lite::Map{%s}->to_unicode' :
-        'Unicode::String::%s', $src ).'(ref$str?$$str:$str)';
+    my $mut = sprintf( $map & 2 ? '$Unicode::Lite::Map{"%s"}->to_unicode' :
+        'Unicode::String::%s', $Src ).'(ref$str?$$str:$str)';
 
     $mut = $map & 1 ?
-        sprintf( '$Unicode::Lite::Map{%s}->from_unicode(%s%s)',
+        sprintf( '$Unicode::Lite::Map{"%s"}->from_unicode(%s%s)',
             $Dst, $mut, $map&2 ? '' : '->utf16' ) :
         $Dst eq 'utf16' && $map&2 ? $mut :
         ($map&2 ? "Unicode::String::utf16($mut)" : $mut)."->$Dst";
 
     return 
         $Unicode::Lite::Convertors{$src}{$dst} =
-        $Unicode::Lite::Convertors{$Src}{$Dst} = eval sprintf
-        q/sub(;$){
+        $Unicode::Lite::Convertors{$Src}{$Dst} = eval sprintf q/sub(;$){
         my $str = scalar @_ ? $_[0] : defined wantarray ? $_ : \$_;
         ref$str?$$str:$str = %s if length ref$str?$$str:$str;
         return ref$str?$$str:$str if defined wantarray;
@@ -125,8 +125,7 @@ fast direct call.
  VAR may be SCALAR or REF to SCALAR.
  If VAR is REF to SCALAR then SCALAR will be converted.
  If VAR is omitted, uses $_.
- If function called to void context and VAR is not REF
- then result placed to $_.
+ If function called to void context and VAR is not REF then result placed to $_.
 
 =head1 EXAMPLES
 
