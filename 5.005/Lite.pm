@@ -14,7 +14,7 @@ use Carp qw/croak carp/;
 
 
 use vars qw($VERSION @EXPORT %EXPORT_TAGS);
-$VERSION = '0.09';
+$VERSION = '0.11';
 @EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
 %EXPORT_TAGS = (
 	utils => [grep{!/^UL_/}@EXPORT],

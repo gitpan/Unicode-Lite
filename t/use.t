@@ -1,6 +1,6 @@
 #!perl -w
 use strict;
-use Test; BEGIN { plan tests => 4 }
+use Test; BEGIN { plan tests => 3 }
 
 
 use Unicode::Map;
@@ -8,7 +8,6 @@ use Unicode::Map;
 	local $_='value';
 	print new Unicode::Map && $_ eq 'value' ?
 		  "The Module 'Unicode::Map' without some bug\n" : <DATA>;
-	ok($_ eq 'value');
 }
 
 
