@@ -7,7 +7,7 @@ use base qw/Exporter/;
 use Carp qw/croak carp/;
 
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 our @EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
 our %EXPORT_TAGS = (
 	utils => [grep{!/^UL_/}@EXPORT],

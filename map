@@ -19,9 +19,9 @@ USAGE
 
 
 my $convertor = eval {
-	convertor($opt{from}, $opt{to}||'utf8', UL_ALL) ||
+	convertor($opt{from}, $opt{to}||'utf8', UL_ALL) } ||
 	convertor($opt{from}, $opt{to}||'utf8')
-} or die "Can't create convertor instance!\n";
+	or die "Can't create convertor instance!\n";
 
 
 $^I = '.bak';
