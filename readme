@@ -1,0 +1,73 @@
+NAME
+    Unicode::Lite - Library for easy charset convertion
+
+SYNOPSIS
+     use Unicode::Lite qw/convert convertor/;
+
+     print convert( 'ibm866', 'unicode', "hello world!" );
+
+     local *ibm2uni = convertor( 'ibm866', 'unicode' );
+     print ibm2uni( "hello world!" );
+
+     my $ibm2uni = convertor( 'ibm866', 'unicode' );
+     print &$ibm2uni( "hello world!" );
+
+DESCRIPTION
+    This module includes string converting function from one and to another
+    charset. Requires installed Unicode::String and Unicode::Map packages.
+
+    Supported unicode charsets: unicode, utf16, ucs2, utf8, utf7, ucs4,
+    latin1, uchr, uhex.
+
+    Supported single-byte charsets: all installed maps in Unicode::Map
+    package.
+
+FUNCTIONS
+    convert SRC_CP, DST_CP, [VAR]
+        Convert VAR from SRC_CP codepage to DST_CP codepage and returns
+        converted string.
+
+    convertor SRC_CP, DST_CP
+        Creates convertor function and returns reference to her, for further
+        fast direct call.
+
+     The following rules are correct for converting functions:
+
+     VAR may be SCALAR or REF to SCALAR.
+     If VAR is REF to SCALAR then SCALAR will be converted.
+     If VAR is omitted, uses $_.
+     If function called to void context and VAR is not REF
+     then result placed to $_.
+
+EXAMPLES
+     local *ibm2uni = convertor( 'ibm866', 'unicode' );
+
+     # EQVIVALENT CALLS:
+
+     ibm2uni( $str );        # called to void context -> result placed to $_
+     $_ = ibm2uni( $str );
+
+     ibm2uni( \$str );       # called with REF to string -> direct converting
+     $str = ibm2uni( $str );
+
+     ibm2uni();              # with omitted param called -> $_ converted
+     ibm2uni( \$_ );
+     $_ = ibm2uni( $_ );
+
+AUTHOR
+    Albert MICHEEV <Albert@f80.n5049.z2.fidonet.org>
+
+COPYRIGHT
+    Copyright (C) 2000, Albert MICHEEV
+
+    This module is free software; you can redistribute it or modify it under
+    the same terms as Perl itself.
+
+AVAILABILITY
+    The latest version of this library is likely to be available from:
+
+    http://www.perl.com/CPAN
+
+SEE ALSO
+    Unicode::String, Unicode::Map.
+
