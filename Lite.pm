@@ -6,23 +6,16 @@ use warnings;
 use base qw/Exporter/;
 use Carp qw/croak carp/;
 
-our @EXPORT  = qw(convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL);
-our $VERSION = '0.05';
-our %MAPPING;
-our %CONVERT;
-our %EQUIVAL;
+our $VERSION = '0.06';
+our @EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
+our %EXPORT_TAGS = ( utils => [grep{ !/^UL_/ }@EXPORT], flags => [grep{/^UL_/}@EXPORT] );
 
 #use enum qw/BITMASK: RP_CHR RP_ENT EQ_CHR EQ_SEQ EQ_7BT/;
-#use enum qw/nil dst src all/;
 use constant RP_CHR => 0x01;
 use constant RP_ENT => 0x02;
 use constant EQ_CHR => 0x04;
 use constant EQ_SEQ => 0x08;
 use constant EQ_7BT => 0x10;
-use constant nil => 0x0;
-use constant src => 0x1;
-use constant dst => 0x2;
-use constant all => 0x3;
 
 use constant UL_CHR => RP_CHR;          # REPLACE TO CHAR   (default <Space>)
 use constant UL_ENT => RP_CHR | RP_ENT; # REPLACE TO ENTITY (like    &#0000;)
@@ -31,9 +24,17 @@ use constant UL_SEQ => EQ_CHR | EQ_SEQ; # EQUIVALENT sequence of chars
 use constant UL_7BT => EQ_7BT | UL_SEQ; # EQUIVALENT sequence of 7bit chars
 use constant UL_ALL => UL_CHR | UL_ENT | UL_EQV | UL_SEQ;
 
+#use enum qw/nil dst src all/;
+use constant nil => 0x0;
+use constant src => 0x1;
+use constant dst => 0x2;
+use constant all => 0x3;
 use constant uni => qr/^utf16|utf8|utf7|ucs4|uchr|uhex|latin1$/;
 
-our $TEST = 0;
+our %MAPPING;
+our %CONVERT;
+our %EQUIVAL;
+our $TEST= 0;
 
 sub convertor($$;$$)
 {
@@ -66,23 +67,20 @@ sub convertor($$;$$)
         croak "Can't create Unicode::Map object for '$$_[1]' charset!";
     }
 
-    #warn "1. $SRC -> $DST ($map)\n" if $TEST;
-    $map = all if #$mod & EQ_7BT and
+    $map = all if
         $map == src && $DST eq 'latin1' or
         $map == dst && $SRC eq 'latin1' or
         $map == nil && $SRC eq 'latin1' && $DST eq 'latin1';
-    #warn "2. $SRC -> $DST ($map)\n" if $TEST;
 
     # Situation checking
     croak "FLAG param can be only for SBCS->SBCS!" if $map != all and $mod;
     croak "CHAR param can be only for SBCS->SBCS!" if $map != all and length $chr;
     croak "Can't convert to the same codepage!"    if $SRC eq $DST and
                                                       $map != all || not $mod & EQ_7BT;
-    my $mut;
-
+    my ($mut);
     if ($map != all)
     {
-        my ($uni, $utf, $str) = ($map^all, 0, 0);
+        my ($uni, $utf) = ($map^all, 0);
         $utf |= src if $uni & src and $SRC ne 'utf16';
         $utf |= dst if $uni & dst and $DST ne 'utf16';
 
@@ -104,7 +102,7 @@ sub convertor($$;$$)
         $CONVERT{$src}{$dst}{$mod}{$chr} =
         $CONVERT{$SRC}{$DST}{$mod}{$chr} = eval 'sub(;$){
         my $str = @_ ? $_[0] : defined wantarray ? $_ : \$_;
-        for( ref$str?$$str:$str ){ if(length){'.$mut.'}
+        for( ref$str?$$str:$str ){ if($_){'.$mut.'}
         return $_ if defined wantarray}
         $_ = $str if defined $_[0] and not ref $str }';
 }
@@ -121,8 +119,6 @@ sub addequal(@)
         my @a = map hex, split /\+/;
         $#a ? \@a : $a[0];
     }$#_ ? @_ : split /\s+/, shift;
-
-    return unless $#chr;
 
     $EQUIVAL{shift @chr} = \@chr;
 
@@ -144,7 +140,7 @@ sub __sbcs_convertor($$$$)
         $mod & RP_CHR and not $mod & RP_ENT;
 
     # fill charsets arrays with U+0000
-    for ([$src, \@src], [$dst, \@dst]){
+    for ([$src, \@src], ($mod&EQ_7BT)?():[$dst, \@dst]){
         my $conv = convertor( $$_[0], 'utf16' );
         @{$$_[1]} = map {&$conv(); $_ ? unpack 'n', $_ : 0} map chr, 0x80..0xff;
     }
@@ -207,7 +203,7 @@ sub __sbcs_convertor($$$$)
         }
     }
 
-    croak "Internal ERROR: not enough additional chars!\n" if @ent + @eqv > @dif;
+    croak "Internal ERROR: not enough additional chars!\n" if @ent+@eqv > @dif;
 
     ($src, $dst) = ('') x 2;
 
@@ -245,7 +241,7 @@ sub __sbcs_convertor($$$$)
 
 =head1 NAME
 
-Unicode::Lite - Library for easy charset convertion
+Unicode::Lite - Easy conversion between encodings
 
 =head1 SYNOPSIS
 
@@ -456,14 +452,18 @@ __DATA__
 00BB 3E+3E # DOUBLE RIGHT >>
 
 # SIGNS
-00B2 28+32+29 # SUPERSCRIPT2 (2)
-00B3 28+33+29 # SUPERSCRIPT3 (3)
-00B9 28+31+29 # SUPERSCRIPT1 (1)
-00A9 28+63+29 # COPYRIGHT  c (c)
-00AE 28+72+29 # REGISTERED R (r)
-2026 2E+2E+2E # ELLIPSIS     ...
-0192 28+66+29 # FUNCTION     (f)
-2122 28+74+6D+29 # TRADE MARK T (tm)
+2024 2E       # ONE DOT  .
+2025 2E+2E    # TWO DOT  ..
+2026 2E+2E+2E # ELLIPSIS ...
+2030 25+2E    # MILLE    %.
+2031 25+2E+2E # THOUSAND %..
+00B2 28+32+29 # SUPER 2  (2)
+00B3 28+33+29 # SUPER 3  (3)
+00B9 28+31+29 # SUPER 1  (1)
+00A9 28+63+29 # COPY   c (c)
+00AE 28+72+29 # REG    R (r)
+0192 28+66+29 # FUNC     (f)
+2122 28+74+6D+29# TRADE (tm)
 
 00BD 31+2F+32 # 1/2
 2153 31+2F+33 # 1/3
@@ -499,14 +499,14 @@ __DATA__
 201C 22   # DOUBLE LEFT "
 201D 22   # DOUBLE RIGH "
 201E 22   # DOUBLE LOW9 "
-00AC 2510 #             ¿ ¿
+00AC 2510 # NOT         ¿ ¿
 00B1 2B+2C# PLUS_MINUS   +-
-2030 25+25# PER MILLE    %%
 2248 7E+3D# ALMOST EQUAL ~=
 2260 21+3D# NOT EQUAL TO !=
 2261 3D+3D# IDENTICAL    ==
 2264 3C+3D# LESS | EQUAL <=
 2265 3E+3D# GREAT| EQUAL >=
+203C 21+21# 2 EXCLAMATION!!
 
 # BLOCK
 2588 42   # Û B

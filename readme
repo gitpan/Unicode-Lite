@@ -1,5 +1,5 @@
 NAME
-    Unicode::Lite - Library for easy charset convertion
+    Unicode::Lite - Easy conversion between encodings
 
 SYNOPSIS
      use Unicode::Lite;

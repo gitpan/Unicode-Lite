@@ -11,6 +11,8 @@ print "The Module 'Unicode::Map' OK!";
 use Unicode::Lite;
 $Unicode::Lite::TEST = 1;
 
+
+
 $_ = "drüben, Straße";
 
 print convert( 'latin1', 'utf8' );
@@ -18,19 +20,7 @@ print convert( 'latin1', 'utf7' );
 print convert( 'latin1', 'ucs2' );
 print convert( 'latin1', 'ucs4' );
 
-$_ = "¯à¨¢¥â ñ¦¨ª¨!";
-
-print convert( 'ibm866', 'utf8' );
-print convert( 'ibm866', 'utf7' );
-print convert( 'ibm866', 'ucs2' );
-print convert( 'ibm866', 'ucs4' );
-
-convert( 'ibm866', 'ucs2' );
-
-print convert( 'ucs2', 'utf8' );
-print convert( 'ucs2', 'ibm866' );
-
-$_ = "drÃ¼ben, StraÃŸe";
+convert( 'latin1', 'utf8' );
 
 print convert( 'utf8', 'latin1' );
 print convert( 'utf8', 'unicode' );
@@ -41,11 +31,27 @@ convert( 'utf8', 'utf16' );
 print convert( 'utf16', 'latin1' );
 print convert( 'utf16', 'utf7' );
 
-$_ = "Ð¿Ñ€Ð¸Ð²ÐµÑ‚ Ñ‘Ð¶Ð¸ÐºÐ¸!";
+
+
+
+$_ = "¯à¨¢¥â ñ¦¨ª¨!";
+
+print convert( 'ibm866', 'utf8' );
+print convert( 'ibm866', 'utf7' );
+print convert( 'ibm866', 'ucs2' );
+print convert( 'ibm866', 'ucs4' );
+
+convert( 'ibm866', 'utf8' );
 
 print convert( 'utf8', 'ibm866' );
+print convert( 'utf8', 'utf16' );
 
-$_ = "ïðèâåò ¸æèêè!";
+convert( 'utf8', 'utf16' );
+
+print convert( 'utf16', 'utf8' );
+print convert( 'utf16', 'ibm866' );
+
+convert( 'utf16', 'windows-1251' );
 
 print convert 'windows-1251', 'ibm866';
 print convert 'windows-1251', 'latin1';
