@@ -3,14 +3,13 @@ $\ = "\n\n";
 $_ = 'value';
 
 my $map = new Unicode::Map();
-die <DATA> unless $_ eq 'value';
-print "The Module 'Unicode::Map' OK!";
+unless($_ eq 'value'){ print <DATA> }
+else  { print "The Module 'Unicode::Map' OK!" }
 
 
 
 use Unicode::Lite;
 $Unicode::Lite::TEST = 1;
-
 
 
 $_ = "drüben, Straße";

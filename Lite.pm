@@ -6,7 +6,7 @@ use warnings;
 use base qw/Exporter/;
 use Carp qw/croak carp/;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 our @EXPORT  = qw/convert convertor addequal UL_CHR UL_ENT UL_EQV UL_SEQ UL_7BT UL_ALL/;
 our %EXPORT_TAGS = ( utils => [grep{ !/^UL_/ }@EXPORT], flags => [grep{/^UL_/}@EXPORT] );
 
@@ -34,207 +34,210 @@ use constant uni => qr/^utf16|utf8|utf7|ucs4|uchr|uhex|latin1$/;
 our %MAPPING;
 our %CONVERT;
 our %EQUIVAL;
+our $REGISTR;
 our $TEST= 0;
 
 sub convertor($$;$$)
 {
-    my ($src, $dst, $mod, $chr) = (lc shift, lc shift, shift||0, shift||'');
+	my ($src, $dst, $mod, $chr) = (lc shift, lc shift, shift||0, shift||'');
 
-    return $CONVERT{$src}{$dst}{$mod}{$chr} if exists
-           $CONVERT{$src}{$dst}{$mod}{$chr};
-    require 'Unicode/String.pm' unless defined %Unicode::String::;
+	return $CONVERT{$src}{$dst}{$mod}{$chr} if exists
+		   $CONVERT{$src}{$dst}{$mod}{$chr};
+	require Unicode::String unless defined %Unicode::String::;
 
-    my  ($SRC, $DST) = ($src, $dst);
-    for ($SRC, $DST){
-        next if $_=~uni or s/^ucs2|unicode$/utf16/o or s/^iso-8859-1$/latin1/o;
-        next if exists $MAPPING{$_};
-        require "Unicode/Map.pm" unless defined %Unicode::Map::;
-        $_ = lc new Unicode::Map->id( uc $_ ) ||
-            croak "Character Set '$_' not defined!";
-        $_ = 'latin1' if $_ eq 'iso-8859-1';
-    }
+	my  ($SRC, $DST) = ($src, $dst);
+	for ($SRC, $DST){
+		next if $_=~uni or s/^ucs2|unicode$/utf16/o or s/^iso-8859-1$/latin1/o;
+		next if exists $MAPPING{$_};
+		unless ($REGISTR){ require Unicode::Map; local $_; 
+				$REGISTR = new Unicode::Map();
+		}
+		$_ = lc $REGISTR->id( uc $_ ) ||
+			croak "Character Set '$_' not defined!";
+		$_ = 'latin1' if $_ eq 'iso-8859-1';
+	}
 
-    return $CONVERT{$src}{$dst}{$mod}{$chr} =
-           $CONVERT{$SRC}{$DST}{$mod}{$chr} if exists
-           $CONVERT{$SRC}{$DST}{$mod}{$chr};
+	return $CONVERT{$src}{$dst}{$mod}{$chr} =
+		   $CONVERT{$SRC}{$DST}{$mod}{$chr} if exists
+		   $CONVERT{$SRC}{$DST}{$mod}{$chr};
 
-    my $map = ($SRC !~ uni) | ($DST !~ uni) << 1;
+	my $map = ($SRC !~ uni) | ($DST !~ uni) << 1;
 
-    for ([$src, $SRC, $map&src], [$dst, $DST, $map&dst]){
-        next unless $$_[2] and !$MAPPING{$$_[0]};
-        $MAPPING{$$_[0]} = $MAPPING{$$_[1]} ||
-       ($MAPPING{$$_[1]} = new Unicode::Map($$_[1])) ||
-        croak "Can't create Unicode::Map object for '$$_[1]' charset!";
-    }
+	for ([$src, $SRC, $map&src], [$dst, $DST, $map&dst]){
+		next unless $$_[2] and !$MAPPING{$$_[0]};
+		$MAPPING{$$_[0]} = $MAPPING{$$_[1]} ||
+	   ($MAPPING{$$_[1]} = new Unicode::Map($$_[1])) ||
+		croak "Can't create Unicode::Map object for '$$_[1]' charset!";
+	}
 
-    $map = all if
-        $map == src && $DST eq 'latin1' or
-        $map == dst && $SRC eq 'latin1' or
-        $map == nil && $SRC eq 'latin1' && $DST eq 'latin1';
+	$map = all if
+		$map == src && $DST eq 'latin1' or
+		$map == dst && $SRC eq 'latin1' or
+		$map == nil && $SRC eq 'latin1' && $DST eq 'latin1';
 
-    # Situation checking
-    croak "FLAG param can be only for SBCS->SBCS!" if $map != all and $mod;
-    croak "CHAR param can be only for SBCS->SBCS!" if $map != all and length $chr;
-    croak "Can't convert to the same codepage!"    if $SRC eq $DST and
-                                                      $map != all || not $mod & EQ_7BT;
-    my ($mut);
-    if ($map != all)
-    {
-        my ($uni, $utf) = ($map^all, 0);
-        $utf |= src if $uni & src and $SRC ne 'utf16';
-        $utf |= dst if $uni & dst and $DST ne 'utf16';
+	# Situation checking
+	croak "FLAG param can be only for SBCS->SBCS!" if $map != all and $mod;
+	croak "CHAR param can be only for SBCS->SBCS!" if $map != all and length $chr;
+	croak "Can't convert to the same codepage!"    if $SRC eq $DST and
+													  $map != all || not $mod & EQ_7BT;
+	my ($mut);
+	if ($map != all)
+	{
+		my ($uni, $utf) = ($map^all, 0);
+		$utf |= src if $uni & src and $SRC ne 'utf16';
+		$utf |= dst if $uni & dst and $DST ne 'utf16';
 
-        $mut = '$_';
+		$mut = '$_';
 
-        $mut = "\$MAPPING{'$SRC'}->to_unicode($mut)"   if $map & src;
-        $mut = "Unicode::String::$SRC($mut)"           if $uni & src && not 
-                                                          $map & dst &&!($utf&src);
-        $mut = "\$MAPPING{'$DST'}->from_unicode($mut)" if $map & dst;
-        $mut = "Unicode::String::utf16($mut)"          if $utf & dst && $map & src;
-        $mut = "$mut->$DST"                            if $uni & dst && $uni & src or
-                                                          $utf & dst && $map & src;
-        $mut = '$_='.$mut;
-    }
-    else{ $mut = __sbcs_convertor($SRC, $DST, $mod, $chr) }
-    warn "$SRC -> $DST ($map)\t\t$mut\n" if $TEST;
+		$mut = "\$MAPPING{'$SRC'}->to_unicode($mut)"   if $map & src;
+		$mut = "Unicode::String::$SRC($mut)"           if $uni & src && not
+														  $map & dst &&!($utf&src);
+		$mut = "\$MAPPING{'$DST'}->from_unicode($mut)" if $map & dst;
+		$mut = "Unicode::String::utf16($mut)"          if $utf & dst && $map & src;
+		$mut = "$mut->$DST"                            if $uni & dst && $uni & src or
+														  $utf & dst && $map & src;
+		$mut = '$_='.$mut;
+	}
+	else{ $mut = __sbcs_convertor($SRC, $DST, $mod, $chr) }
+	warn "$SRC -> $DST ($map)\t\t$mut\n" if $TEST;
 
-    return
-        $CONVERT{$src}{$dst}{$mod}{$chr} =
-        $CONVERT{$SRC}{$DST}{$mod}{$chr} = eval 'sub(;$){
-        my $str = @_ ? $_[0] : defined wantarray ? $_ : \$_;
-        for( ref$str?$$str:$str ){ if($_){'.$mut.'}
-        return $_ if defined wantarray}
-        $_ = $str if defined $_[0] and not ref $str }';
+	return
+		$CONVERT{$src}{$dst}{$mod}{$chr} =
+		$CONVERT{$SRC}{$DST}{$mod}{$chr} = eval 'sub(;$){
+		my $str = @_ ? $_[0] : defined wantarray ? $_ : \$_;
+		for( ref$str?$$str:$str ){ if($_){'.$mut.'}
+		return $_ if defined wantarray}
+		$_ = $str if defined $_[0] and not ref $str }';
 }
 
 sub convert($$;$$$){
-    my $fn = convertor( shift, shift, $_[1], $_[2] );
-    goto &$fn;
+	my $fn = convertor( shift, shift, $_[1], $_[2] );
+	goto &$fn;
 }
 
 sub addequal(@)
 {
-    return unless
-    my @chr = map{
-        my @a = map hex, split /\+/;
-        $#a ? \@a : $a[0];
-    }$#_ ? @_ : split /\s+/, shift;
+	return unless
+	my @chr = map{
+		my @a = map hex, split /\+/;
+		$#a ? \@a : $a[0];
+	}$#_ ? @_ : split /\s+/, shift;
 
-    $EQUIVAL{shift @chr} = \@chr;
+	$EQUIVAL{shift @chr} = \@chr;
 
-    @chr = map{
-        (ref || !exists $EQUIVAL{$_}) ? $_ :
-        ($_, @{$EQUIVAL{$_}})
-    }@chr;
+	@chr = map{
+		(ref || !exists $EQUIVAL{$_}) ? $_ :
+		($_, @{$EQUIVAL{$_}})
+	}@chr;
 }
 
 sub __sbcs_convertor($$$$)
 {
-    my ($src, $dst, $mod, $chr) = (shift, shift, shift, shift);
-    my (@src, %src, @dst, %dst, @dif, %dif);
+	my ($src, $dst, $mod, $chr) = (shift, shift, shift, shift);
+	my (@src, %src, @dst, %dst, @dif, %dif);
 
-    croak "Unknown flags: $mod!"      if $mod & ~(UL_ALL|UL_7BT);
-    croak "CHAR and UL_ENT together!" if length $chr and $mod & RP_ENT;
+	croak "Unknown flags: $mod!"      if $mod & ~(UL_ALL|UL_7BT);
+	croak "CHAR and UL_ENT together!" if length $chr and $mod & RP_ENT;
 
-    $chr = length($chr) ? substr($chr,0,1) : '?' if
-        $mod & RP_CHR and not $mod & RP_ENT;
+	$chr = length($chr) ? substr($chr,0,1) : '?' if
+		$mod & RP_CHR and not $mod & RP_ENT;
 
-    # fill charsets arrays with U+0000
-    for ([$src, \@src], ($mod&EQ_7BT)?():[$dst, \@dst]){
-        my $conv = convertor( $$_[0], 'utf16' );
-        @{$$_[1]} = map {&$conv(); $_ ? unpack 'n', $_ : 0} map chr, 0x80..0xff;
-    }
+	# fill charsets arrays with U+0000
+	for ([$src, \@src], ($mod&EQ_7BT)?():[$dst, \@dst]){
+		my $conv = convertor( $$_[0], 'utf16' );
+		@{$$_[1]} = map {&$conv(); $_ ? unpack 'n', $_ : 0} map chr, 0x80..0xff;
+	}
 
-    my $find = sub(){
-        my $chr = $src[$_];
-        return 0 unless exists $EQUIVAL{$chr};
-        LOOP:
-        for (@{$EQUIVAL{$chr}}){
-            if (!ref){ next LOOP unless $_ < 0x80 or exists $dst{$_}; return $_ }
-            next unless $mod & EQ_SEQ;
-            for (@$_){ next LOOP unless $_ < 0x80 or exists $dst{$_}} return $_;
-        }
-        return 0;
-    };
+	my $find = sub(){
+		my $chr = $src[$_];
+		return 0 unless exists $EQUIVAL{$chr};
+		LOOP:
+		for (@{$EQUIVAL{$chr}}){
+			if (!ref){ next LOOP unless $_ < 0x80 or exists $dst{$_}; return $_ }
+			next unless $mod & EQ_SEQ;
+			for (@$_){ next LOOP unless $_ < 0x80 or exists $dst{$_}} return $_;
+		}
+		return 0;
+	};
 
-    @dst = (0) x 0x80        if $mod & EQ_7BT;
-    @src{@src} = 0x80..0xff  if $mod &~RP_CHR;
-    @dst{@dst} = 0x80..0xff;
+	@dst = (0) x 0x80        if $mod & EQ_7BT;
+	@src{@src} = 0x80..0xff  if $mod &~RP_CHR;
+	@dst{@dst} = 0x80..0xff;
 
-    # collect positions of unused chars
-    if ($mod & ~UL_CHR){                # if need indirect replace
-        for (0 .. $#dst){
-        push @dif, $_ + 0x80 if
-            !$dst[$_] or                # char not used in dst codepage
-            !exists $src{$dst[$_]}      # char not used in src codepage
-        }
-    }
+	# collect positions of unused chars
+	if ($mod & ~UL_CHR){                # if need indirect replace
+		for (0 .. $#dst){
+		push @dif, $_ + 0x80 if
+			!$dst[$_] or                # char not used in dst codepage
+			!exists $src{$dst[$_]}      # char not used in src codepage
+		}
+	}
 
-    # read equivalent rules
-    if ($mod & UL_EQV and not %EQUIVAL){
-        local $_;
-        while (<DATA>){ s/\s*#.*//so; addequal($_); }
-    }
+	# read equivalent rules
+	if ($mod & UL_EQV and not %EQUIVAL){
+		local $_;
+		while (<DATA>){ s/\s*#.*//so; addequal($_); }
+	}
 
-    my (@map, @eqv, @ent, @chr, @del);
+	my (@map, @eqv, @ent, @chr, @del);
 
-    for (0 .. $#src)
-    {
-        next if !$src[$_] or            # char not used in src codepage
-                 $src[$_] == $dst[$_];  # chars in src and dst maps are equal
+	for (0 .. $#src)
+	{
+		next if !$src[$_] or            # char not used in src codepage
+				 $src[$_] == $dst[$_];  # chars in src and dst maps are equal
 
-        if( exists $dst{$src[$_]} ){
-            push @map, [$_, $src[$_]];
+		if( exists $dst{$src[$_]} ){
+			push @map, [$_, $src[$_]];
 
-        }elsif( $mod & EQ_CHR and my $uni = &$find ){
-            next if not ref $uni and
-            push @map, [$_, $uni];
-            push @eqv, [$_, $uni];
+		}elsif( $mod & EQ_CHR and my $uni = &$find ){
+			next if not ref $uni and
+			push @map, [$_, $uni];
+			push @eqv, [$_, $uni];
 
-        }elsif( $mod & RP_ENT ){
-            push @ent, [$_, $src[$_]];
+		}elsif( $mod & RP_ENT ){
+			push @ent, [$_, $src[$_]];
 
-        }elsif( $mod & RP_CHR ){
-            push @chr, $_;
+		}elsif( $mod & RP_CHR ){
+			push @chr, $_;
 
-        }else{
-            push @del, $_;
+		}else{
+			push @del, $_;
 
-        }
-    }
+		}
+	}
 
-    croak "Internal ERROR: not enough additional chars!\n" if @ent+@eqv > @dif;
+	croak "Internal ERROR: not enough additional chars!\n" if @ent+@eqv > @dif;
 
-    ($src, $dst) = ('') x 2;
+	($src, $dst) = ('') x 2;
 
-    $src .= chr $$_[0] + 0x80,
-    $dst .= chr($$_[1] < 0x80 ? $$_[1] : $dst{$$_[1]})
-                                for @map;
-    for (@ent){
-        $src .= chr $$_[0] + 0x80;
-        $dst .= $$_[0] = chr shift @dif;
-    }
+	$src .= chr $$_[0] + 0x80,
+	$dst .= chr($$_[1] < 0x80 ? $$_[1] : $dst{$$_[1]})
+								for @map;
+	for (@ent){
+		$src .= chr $$_[0] + 0x80;
+		$dst .= $$_[0] = chr shift @dif;
+	}
 
-    for (@eqv){
-        $src .= chr $$_[0] + 0x80;
-        $dst .= $$_[0] = chr shift @dif;
-        $$_[1] = join '', map{
-            chr( $_ < 0x80 ? $_ : $dst{$_} )
-        }@{$$_[1]};
-        $$_[1] =~ s/([\-\\\/\$])/\\$1/gso;
-    }
-    $src .= chr $_ + 0x80       for @chr;
-    $dst .= $chr x(@del?@chr:1) if  @chr;
-    $src .= chr $_ + 0x80       for @del;
+	for (@eqv){
+		$src .= chr $$_[0] + 0x80;
+		$dst .= $$_[0] = chr shift @dif;
+		$$_[1] = join '', map{
+			chr( $_ < 0x80 ? $_ : $dst{$_} )
+		}@{$$_[1]};
+		$$_[1] =~ s/([\-\\\/\$])/\\$1/gso;
+	}
+	$src .= chr $_ + 0x80       for @chr;
+	$dst .= $chr x(@del?@chr:1) if  @chr;
+	$src .= chr $_ + 0x80       for @del;
 
-    s/(?=[-\\\[\]])/\\/gso      for $src, $dst;
+	s/(?=[-\\\[\]])/\\/gso      for $src, $dst;
 
-    my
-    $res = "tr\n[$src]\n[$dst]" . (@del?'d':'');
-    $res.= ";s/$$_[0]/&#$$_[1];/g" for @ent;
-    $res.= ";s/$$_[0]/$$_[1]/g"    for @eqv;
+	my
+	$res = "tr\n[$src]\n[$dst]" . (@del?'d':'');
+	$res.= ";s/$$_[0]/&#$$_[1];/g" for @ent;
+	$res.= ";s/$$_[0]/$$_[1]/g"    for @eqv;
 
-    return $res;
+	return $res;
 }
 
 1;
@@ -263,7 +266,7 @@ charset. Requires installed Unicode::String and Unicode::Map packages.
 Supported unicode charsets: unicode, utf16, ucs2, utf8, utf7, ucs4,
 uchr, uhex.
 
-Supported Single-Byte Charsets (SBCS): latin1 and all installed maps in 
+Supported Single-Byte Charsets (SBCS): latin1 and all installed maps in
 Unicode::Map package.
 
 =head1 FUNCTIONS
@@ -290,7 +293,7 @@ If flag UL_CHR or UL_ENT is not specified, absent chars will be deleted.
 Param CHAR used for replacing of absent chars. If CHAR is not specified,
 will be used '?' char.
 
-If you are getting message "Character Set '' not defined!", run the 
+If you are getting message "Character Set '' not defined!", run the
 script test.pl from distribution.
 
 =item B<convert> SRC_CP DST_CP [VAR] [FLGS] [CHAR]
